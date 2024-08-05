@@ -129,3 +129,36 @@ plt.ylabel('Amplitude (mV)')
 plt.legend()
 plt.grid()
 plt.show()
+
+def impulse(size):
+  y = np.zeros(size)
+  y[size//2] = 1
+  return y
+NUM = 100000
+n = np.arange(NUM)
+δ = impulse(n.size)
+
+h_notch_50 = notch_filter(δ, metadata['sampling_rate'], freq=50.0)
+H_notch_50 = np.fft.rfft(h_notch_50)
+plt.plot(np.linspace(0,250,H_notch_50.size), abs(H_notch_50))
+plt.xlim(0, 75)
+plt.title('Notch Frequency Response')
+plt.xlabel('Frequency (hz)')
+plt.ylabel('Magnitude')
+plt.show()
+
+h_notch_150 = notch_filter(δ, metadata['sampling_rate'], freq=150.0)
+H_notch_150 = np.fft.rfft(h_notch_150)
+plt.plot(np.linspace(0,250,H_notch_150.size), abs(H_notch_150))
+plt.title('Notch Frequency Response')
+plt.xlim(125, 200)
+plt.xlabel('Frequency (hz)')
+plt.ylabel('Magnitude')
+plt.show()
+
+plt.plot(np.linspace(0,250,H_high.size)[:200], abs(H_high)[:200])
+plt.title('High-Pass Frequency Response')
+plt.xlabel('Frequency (hz)')
+plt.ylabel('Magnitude')
+plt.legend()
+plt.show()
