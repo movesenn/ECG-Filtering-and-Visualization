@@ -1,0 +1,131 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.signal import butter, filtfilt
+from scipy.fft import fft, fftfreq
+
+def read_header(file_path):
+    with open(file_path, 'r') as file:
+        header = file.readlines()
+    metadata = {}
+    metadata['sampling_rate'] = int(header[0].split()[2])
+    metadata['num_signals'] = int(header[0].split()[1])
+    metadata['duration'] = int(header[0].split()[3])
+    for line in header:
+        if line.startswith('# Age:'):
+            metadata['age'] = int(line.split(':')[1].strip())
+        elif line.startswith('# Sex:'):
+            metadata['gender'] = line.split(':')[1].strip()
+        elif line.startswith('# ECG date:'):
+            metadata['recording_date'] = line.split(':')[1].strip()
+    return metadata
+def read_data(file_path, num_signals, sampling_rate):
+    data = np.fromfile(file_path, dtype=np.int16)
+    total_samples = data.size // num_signals
+    data = data[:total_samples * num_signals].reshape((total_samples, num_signals))
+    return data
+def highpass_filter(data, cutoff, fs, order=5):
+    nyquist = 0.5 * fs
+    normal_cutoff = cutoff / nyquist
+    b, a = butter(order, normal_cutoff, btype='high', analog=False)
+    filtered_data = filtfilt(b, a, data, axis=0)
+    return filtered_data
+def notch_filter(data, fs, freq=50.0, quality_factor=30.0):
+    nyquist = 0.5 * fs
+    notch_freq = freq / nyquist
+    b, a = butter(2, [notch_freq - 0.01, notch_freq + 0.01], btype='bandstop', analog=False)
+    filtered_data = filtfilt(b, a, data, axis=0)
+    return filtered_data
+
+header_file = '/content/rec_1.hea'
+data_file = '/content/rec_1.dat'
+metadata = read_header(header_file)
+raw_data = read_data(data_file, metadata['num_signals'], metadata['sampling_rate'])
+
+highpass_cutoff = 1
+filtered_data_hp = highpass_filter(raw_data, highpass_cutoff, metadata['sampling_rate'])
+filtered_data_notch_50 = notch_filter(filtered_data_hp, metadata['sampling_rate'], freq=50.0)
+filtered_data_notch_150 = notch_filter(filtered_data_notch_50, metadata['sampling_rate'], freq=150.0)
+
+def plot_frequency_spectrum(data, fs, title):
+    N = data.shape[0]
+    yf = fft(data[:, 0])
+    xf = fftfreq(N, 1 / fs)[:N // 2]
+    plt.figure(figsize=(10, 6))
+    plt.plot(xf, 2.0 / N * np.abs(yf[:N // 2]))
+    plt.title(title)
+    plt.xlabel('Frequency (Hz)')
+    plt.ylabel('Amplitude (mV)')
+    plt.grid()
+    plt.show()
+
+time = np.arange(raw_data.shape[0]) / metadata['sampling_rate']
+plt.figure(figsize=(15, 12))
+
+plt.subplot(4, 1, 1)
+plt.plot(time, raw_data[:, 0], label='Raw Data')
+plt.title('Raw (unfiltered) ECG Data')
+plt.xlabel('Time (s)')
+plt.ylabel('Amplitude (mV)')
+plt.legend()
+plt.grid()
+
+plt.subplot(4, 1, 2)
+plt.plot(time, filtered_data_hp[:, 0], label='High-pass Filtered Data (0.5Hz)')
+plt.title('High-pass Filtered ECG Data')
+plt.xlabel('Time (s)')
+plt.ylabel('Amplitude (mV)')
+plt.legend()
+plt.grid()
+
+plt.subplot(4, 1, 3)
+plt.plot(time, filtered_data_notch_50[:, 0], label='Notch Filtered Data (50Hz removed)')
+plt.title('Notch Filtered ECG Data (50Hz)')
+plt.xlabel('Time (s)')
+plt.ylabel('Amplitude (mV)')
+plt.legend()
+plt.grid()
+
+plt.subplot(4, 1, 4)
+plt.plot(time, filtered_data_notch_150[:, 0], label='Notch Filtered Data (50Hz & 150Hz removed)')
+plt.title('Notch Filtered ECG Data (50Hz & 150Hz)')
+plt.xlabel('Time (s)')
+plt.ylabel('Amplitude (mV)')
+plt.legend()
+plt.grid()
+plt.tight_layout()
+plt.show()
+
+plt.figure(figsize=(15, 6))
+plt.plot(time, raw_data[:, 0], label='Raw Data', alpha=0.5)
+plt.plot(time, filtered_data_notch_150[:, 0], label='Filtered Data (50Hz & 150Hz removed)', alpha=0.75)
+plt.title('Raw (unfiltered) vs. Fully Filtered ECG Data')
+plt.xlabel('Time (s)')
+plt.ylabel('Amplitude (mV)')
+plt.legend()
+plt.grid()
+plt.show()
+
+plot_frequency_spectrum(raw_data, metadata['sampling_rate'], 'Frequency Spectrum of Raw ECG Data')
+plot_frequency_spectrum(filtered_data_notch_150, metadata['sampling_rate'], 'Frequency Spectrum of Fully Filtered ECG Data')
+
+plt.figure(figsize=(15, 6))
+plt.plot(time[1000:2000], raw_data[1000:2000, 0], label='Raw Data', alpha=0.5)
+plt.plot(time[1000:2000], filtered_data_notch_150[1000:2000, 0], label='Filtered Data (50Hz & 150Hz removed)', alpha=0.75)
+plt.title('Zoomed-in View of Raw vs. Fully Filtered ECG Data')
+plt.xlabel('Time (s)')
+plt.ylabel('Amplitude (mV)')
+plt.legend()
+plt.grid()
+plt.show()
+
+plt.figure(figsize=(12, 6))
+plt.plot(time, raw_data[:, 0], label='Raw Data', alpha=0.4)
+plt.plot(time, filtered_data_hp[:, 0], label='High-pass Filtered', alpha=0.6)
+plt.plot(time, filtered_data_notch_50[:, 0], label='Notch Filtered', alpha=0.8)
+plt.plot(time, filtered_data_notch_150[:, 0], label='Fully Filtered', color='black')
+plt.title('ECG Signal Filtering Pipeline')
+plt.xlabel('Time (s)')
+plt.ylabel('Amplitude (mV)')
+plt.legend()
+plt.grid()
+plt.show()
